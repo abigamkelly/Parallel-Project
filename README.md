@@ -1,3 +1,1 @@
-# Parallel-Project
-We need to do this
-Bet!
+# Parallel Regional Colocation Mining
