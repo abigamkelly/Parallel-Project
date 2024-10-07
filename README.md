@@ -20,7 +20,7 @@ TODO
 
 ### Dataset
 
-Chicago: 193,074 -> 178,518
+Chicago: 193,074 -> 178,480
 
 
 Seattle: 1,149,893 -> 871,037
