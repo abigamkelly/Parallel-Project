@@ -16,3 +16,11 @@ TODO
 ### How to run:
 
 TODO
+
+
+### Dataset
+
+Chicago: 193,074 -> 178,518
+
+
+Seattle: 1,149,893 -> 871,037
