@@ -131,8 +131,8 @@ def shapefile_processing(shapefile_path, distance_threshold):
 
 def main():
     distance_directory = 'IntermediateData/distance_threshold_parameter.txt'
-    shapefile_path = '/home/amk7r/colocation_mining/compression_code/data/north_america/shapefile'
-    directory_path = '/home/amk7r/colocation_mining/compression_code/data/north_america'
+    shapefile_path = 'data/north_america/shapefile'
+    directory_path = 'data/north_america'
     prevalence_threshold = 0.55    # set the prevalence threshold
     
     distance_threshold = read_distance_threshold(distance_directory)
