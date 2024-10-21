@@ -25,7 +25,7 @@ extern "C" {
 
         // get the featureInfo
         void read_featureInfo() {
-            std::ifstream featureInfo_file("required_files/featureInfo/featureInfo" + std::to_string(this->subregion_id) + ".csv");
+            std::ifstream featureInfo_file("IntermediateData/featureInfoParallel/featureInfo" + std::to_string(this->subregion_id) + ".csv");
         
             if (!featureInfo_file.is_open()) {
                 std::cerr << "Error opening file!" << std::endl;
@@ -80,7 +80,7 @@ extern "C" {
 
         // get the star_neighbors
         void read_star_neighbors() {
-            std::ifstream star_neighbors_file("required_files/starNeighbors/starNeighbors" + 
+            std::ifstream star_neighbors_file("IntermediateData/starNeighborsParallel/starNeighbors" + 
                                               std::to_string(this->subregion_id) + ".csv");
 
             if (!star_neighbors_file.is_open()) {
@@ -428,7 +428,7 @@ extern "C" {
         }
         
         void read_featureInfo() {
-            std::ifstream featureInfo_file("required_files/border_featureInfo/featureInfo.csv");
+            std::ifstream featureInfo_file("IntermediateData/border_featureInfo/featureInfo.csv");
         
             if (!featureInfo_file.is_open()) {
                 std::cerr << "Error opening file" << std::endl;
@@ -486,7 +486,7 @@ extern "C" {
         
         void read_star_neighbors() {
             // read the star_neighbors from a csv file
-            std::ifstream star_neighbors_file("required_files/border_starNeighbors/starNeighbors.csv");
+            std::ifstream star_neighbors_file("IntermediateData/border_starNeighbors/starNeighbors.csv");
 
             if (!star_neighbors_file.is_open()) {
                 std::cerr << "Error opening file" << std::endl;
