@@ -180,12 +180,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-    
-    
-'''
-NORTH AMERICA
-Sequential star neighbors: 76.12617540359497
-Parallel star neighbors: 16.774269580841064
-Sequential Colocation Mining: 1.0480549335479736
-Parallel Colocation Mining: 0.9657971858978271
-'''
