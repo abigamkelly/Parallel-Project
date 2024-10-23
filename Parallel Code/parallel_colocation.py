@@ -111,6 +111,7 @@ def shapefile_processing(shapefile_path, distance_threshold):
         'ID': ID})
     
     ids = border.border_df['ID'].to_list()
+    return ids
     
     border.calc_feature_info()
     with open('IntermediateData/border_featureInfo/featureInfo.csv', 'w', newline='') as csvfile:
@@ -131,8 +132,8 @@ def shapefile_processing(shapefile_path, distance_threshold):
 
 def main():
     distance_directory = 'IntermediateData/distance_threshold_parameter.txt'
-    shapefile_path = 'data/north_america/shapefile'
-    directory_path = 'data/north_america'
+    shapefile_path = '/home/amk7r/Parallel-Project/data/north_america/shapefile'
+    directory_path = '/home/amk7r/Parallel-Project/data/north_america'
     prevalence_threshold = 0.55    # set the prevalence threshold
     
     distance_threshold = read_distance_threshold(distance_directory)
@@ -155,9 +156,9 @@ def main():
 
     # sort the df by featureType
     border.combined_df = border.combined_df.sort_values(by='featureType', ignore_index=True)
-    shapefile_processing(shapefile_path, distance_threshold)
+    ids = shapefile_processing(shapefile_path, distance_threshold)
     
-    '''number_borders = 1
+    number_borders = 1
     lib.border_main(ctypes.c_int(number_borders), ctypes.c_double(prevalence_threshold))
     
     arr_len = len(ids)
@@ -167,7 +168,7 @@ def main():
     lib.update_border_info.argtypes = (ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int)
     lib.update_border_info(arr_c, arr_len, border_number)
     
-    lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
+    '''lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
     lib.combine_hashmaps(number_subregions, number_borders)
     lib.combine_instance_tables.argtypes = (ctypes.c_int, ctypes.c_int)
     lib.combine_instance_tables(number_subregions, number_borders)

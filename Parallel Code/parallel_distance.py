@@ -122,7 +122,7 @@ def knee_method(averages):
     return distance_threshold
 
 def main():
-    directory = 'data/north_america/'
+    directory = '/home/amk7r/Parallel-Project/data/north_america/'
     df = read_data(directory)
     s = time.time()
     all_distances, max_k, num_pts = rtree_processing(df)
@@ -131,7 +131,7 @@ def main():
     distance_threshold = knee_method(averages)
 
     print('DISTANCE THRESHOLD (KM):', distance_threshold)
-    with open('distance_threshold_parameter.txt', 'w') as file:
+    with open('IntermediateData/distance_threshold_parameter.txt', 'w') as file:
         file.write(str(distance_threshold))
     print('TIME TAKEN (SEC):', e - s)
     
