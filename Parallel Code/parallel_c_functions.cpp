@@ -239,6 +239,7 @@ extern "C" {
                 size2_file << "(" << i[0] << ", " << i[1] << ")" << std::endl;
             }
             size2_file.close();
+            std::cout << "exiting" << std::endl;
             return size2_patterns;
         }
 
@@ -318,13 +319,16 @@ extern "C" {
                 std::vector<std::string> basePattern(currentPattern.begin(), currentPattern.begin() + degree - 1);
 
                 std::string lastFeature = currentPattern[degree - 1];
-                // Add entries to instance_table and hashmap
-                this->instance_table[currentPattern] = {};
-                this->hashmap[currentPattern] = {};
-                
-                // Initialize sets for each element in currentPattern in hashmap
-                for (const auto& f : currentPattern) {
-                    this->hashmap[currentPattern][f] = {};
+                #pragma omp critical 
+                {
+                    // Add entries to instance_table and hashmap
+                    this->instance_table[currentPattern] = {};
+                    this->hashmap[currentPattern] = {};
+
+                    // Initialize sets for each element in currentPattern in hashmap
+                    for (const auto& f : currentPattern) {
+                        this->hashmap[currentPattern][f] = {};
+                    }
                 }
                 
                 auto colocTableIt = this->instance_table.find(basePattern);
@@ -365,12 +369,14 @@ extern "C" {
                             std::vector<int> new_key = key;
                             new_key.push_back(n);
                             std::vector<int> intersectionVec(neighbors.begin(), neighbors.end());
-                            this->instance_table[currentPattern][new_key] = intersectionVec;
-
-                            for (size_t k = 0; k < new_key.size(); ++k) {
-                                this->hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
+                            #pragma omp critical
+                            {
+                                this->instance_table[currentPattern][new_key] = intersectionVec;
+                                for (size_t k = 0; k < new_key.size(); ++k) {
+                                    this->hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
+                                }
+                                this->hashmap[currentPattern][lastFeature].insert(neighbors.begin(), neighbors.end());
                             }
-                            this->hashmap[currentPattern][lastFeature].insert(neighbors.begin(), neighbors.end());
                         }
                     }
                 }
@@ -384,30 +390,35 @@ extern "C" {
                 }
                 double PI = *std::min_element(pr.begin(), pr.end());
                 if (PI >= prevalence_threshold) {
-                    prevalent.push_back(currentPattern);
-                }
-            }
-
-            std::cout << "Degree " << degree << " Prevalent Patterns for Sub-Region:" +
-                std::to_string(number_subregions) + ":"<< std::endl;
-            std::ofstream patterns_file("size" + std::to_string(degree) + "_patterns_subregion" 
-                                        + std::to_string(number_subregions) + ".txt");
-            
-            for (auto& patternVec : prevalent) {
-                std::cout << "(";
-                patterns_file << "(";
-                for (size_t i = 0; i < patternVec.size(); i++) {
-                    std::cout << patternVec[i];
-                    patterns_file << patternVec[i];
-                    if (i < patternVec.size() - 1) {
-                        std::cout << ", ";
-                        patterns_file << ", ";
+                    #pragma omp critical
+                    {
+                        prevalent.push_back(currentPattern);
                     }
                 }
-                std::cout << ")" << std::endl;
-                patterns_file << ")" << std::endl;
             }
-            patterns_file.close();
+            
+            if(!prevalent.empty()) {
+                std::cout << "Degree " << degree << " Prevalent Patterns for Sub-Region" +
+                    std::to_string(number_subregions) + ":"<< std::endl;
+                std::ofstream patterns_file("size" + std::to_string(degree) + "_patterns_subregion" 
+                                            + std::to_string(number_subregions) + ".txt");
+
+                for (auto& patternVec : prevalent) {
+                    std::cout << "(";
+                    patterns_file << "(";
+                    for (size_t i = 0; i < patternVec.size(); i++) {
+                        std::cout << patternVec[i];
+                        patterns_file << patternVec[i];
+                        if (i < patternVec.size() - 1) {
+                            std::cout << ", ";
+                            patterns_file << ", ";
+                        }
+                    }
+                    std::cout << ")" << std::endl;
+                    patterns_file << ")" << std::endl;
+                }
+                patterns_file.close();
+            }
             return prevalent;
         }
     };
@@ -930,11 +941,13 @@ extern "C" {
                 subregions[i].degree2Processing(size2_candidatePatterns,
                                                 size2_candidatePatterns.size(), 
                                                 prevalence_threshold, i);
+            std::cout << "exited" << std::endl;
             
             int degree = 3;
             std::vector<std::vector<std::string>> candidatePatterns =
                 subregions[i].getCandidatePatterns(subregions[i].size2_patterns, degree);
             while (!candidatePatterns.empty()) {
+                std::cout << "calling colocationGeneral" << std::endl;
                 std::vector<std::vector<std::string>> prevalent_patterns = 
                 subregions[i].colocationGeneral(candidatePatterns, candidatePatterns.size(), 
                            prevalence_threshold, degree, i);
