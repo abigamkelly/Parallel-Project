@@ -60,21 +60,6 @@ extern "C" {
                 }
             }
 
-            /*
-            while (std::getline(featureInfo_file, line)) {
-                std::istringstream lineStream(line);
-                std::string cell;
-                std::string key;
-                std::vector<int> values;
-                if (std::getline(lineStream, cell, ',')) {
-                    key = cell;
-                }
-                while (std::getline(lineStream, cell, ',')) {
-                    values.push_back(std::stoi(cell));
-                }
-                this->featureInfo[key] = values;
-            }*/
-
             featureInfo_file.close();
         }
 
@@ -116,21 +101,6 @@ extern "C" {
                 }
             }
 
-            /*
-            while (std::getline(star_neighbors_file, line)) {
-                std::stringstream ss(line);
-                int key;
-                ss >> std::ws;
-                ss >> key;
-                ss.ignore();
-
-                int value;
-                std::vector<int> values;
-                while (ss >> value) {
-                    values.push_back(value);
-                    ss.ignore();
-                }
-                star_neighbors[key] = values;*/
             star_neighbors_file.close();
         }
 
@@ -474,24 +444,6 @@ extern "C" {
                 }
             }
 
-            /*while (std::getline(featureInfo_file, line)) {
-                std::istringstream lineStream(line);
-                std::string cell;
-                std::string key;
-                std::vector<int> values;
-
-                // Read the first cell (key)
-                if (std::getline(lineStream, cell, ',')) {
-                    key = cell; // Assuming the key is a single character
-                }
-
-                // Read the rest of the cells (values)
-                while (std::getline(lineStream, cell, ',')) {
-                    values.push_back(std::stoi(cell));
-                }
-                this->featureInfo[key] = values;
-            }*/
-
             featureInfo_file.close();
         }
         
@@ -533,26 +485,6 @@ extern "C" {
                 }
             }
 
-            /*while (std::getline(star_neighbors_file, line1)) {
-                std::stringstream ss(line1);
-                int key;
-                // Skip leading whitespace characters
-                ss >> std::ws;
-                ss >> key;
-                ss.ignore(); // Ignore the comma
-
-                // Read the list of ints
-                int value;
-                std::vector<int> values;
-                while (ss >> value) {
-                    values.push_back(value);
-                    ss.ignore(); // Ignore the space
-                }
-
-                // Store the data in the map
-                star_neighbors[key] = values;
-            }*/
-
             star_neighbors_file.close();
         }
         
@@ -592,6 +524,7 @@ extern "C" {
 
             int canSize = candidatePatterns.size();
             
+            #pragma omp parallel for
             for (size_t coloc_idx = 0; coloc_idx < canSize; ++coloc_idx) {
                 const auto& coloc = candidatePatterns[coloc_idx];
                 std::string first_feature = coloc[0];
@@ -609,10 +542,14 @@ extern "C" {
                 int second_feature_end = values2[2];
                 
                 std::vector<std::string> coloc_key = {first_feature, second_feature};
-                instance_table[coloc_key] = {};
-                this->hashmap[coloc_key] = {};
-                this->hashmap[coloc_key][first_feature] = {};
-                this->hashmap[coloc_key][second_feature] = {};
+                
+                #pragma omp critical
+                {
+                    instance_table[coloc_key] = {};
+                    this->hashmap[coloc_key] = {};
+                    this->hashmap[coloc_key][first_feature] = {};
+                    this->hashmap[coloc_key][second_feature] = {};
+                }
                 
                 for (int index = first_feature_start; index <= first_feature_end; index++) {
                     auto star_neighbor_it = this->star_neighbors.find(index);
@@ -621,11 +558,11 @@ extern "C" {
                                             second_feature_end);
                     if (!neighbors.empty()) {
                         std::vector<int> index_tuple = {index};
-                        this->instance_table[coloc_key][index_tuple] = neighbors;
 
                         #pragma omp critical
                         {
-                        this->hashmap[coloc_key][first_feature].insert(index);
+                            this->instance_table[coloc_key][index_tuple] = neighbors;
+                            this->hashmap[coloc_key][first_feature].insert(index);
                             for (int neighbor : neighbors) {
                                 this->hashmap[coloc_key][second_feature].insert(neighbor);
                             }
@@ -683,7 +620,11 @@ extern "C" {
                                                                 int number_subregions) {
             std::vector<std::vector<std::string>> prevalent;
             
-            for (const auto& coloc : candidatePatterns) {
+            int cand_size = candidatePatterns.size();
+            
+            #pragma omp parallel for
+            for(size_t coloc_idx = 0; coloc_idx < cand_size; coloc_idx++) {
+                const auto& coloc = candidatePatterns[coloc_idx];
                 std::string first_feature = coloc[0];
                 std::string second_feature = coloc[1];
                 int total_first_feature = 0;
@@ -710,7 +651,8 @@ extern "C" {
                 }
 
                 if (PI >= prevalence_threshold) {
-                       prevalent.push_back(coloc);
+                    #pragma omp critical
+                    prevalent.push_back(coloc);
                 }
             }
             
@@ -745,13 +687,17 @@ extern "C" {
             std::vector<std::vector<std::string>> subpatterns;
             std::vector<std::string> current;
             generateCombinations(pattern, degree - 1, subpatterns, current, 0);
-
-            for (const auto& subpattern : subpatterns) {
+            bool all_found = true;
+            
+            for (int i = 0; i < subpatterns.size(); i++) {
+                const auto& subpattern = subpatterns[i];
+                if (!all_found) continue;
                 if (prevalentPatterns.find(subpattern) == prevalentPatterns.end()) {
-                    return false;
+                    #pragma omp critical
+                    all_found = false
                 }
             }
-            return true;
+            return all_found;
         }
 
         std::vector<std::vector<std::string>> getCandidatePatterns(
@@ -764,8 +710,10 @@ extern "C" {
 
             generateCombinations(features, degree, _patterns, current, 0);
 
+            #pragma omp parallel for
             for (const auto& pattern : _patterns) {
                 if (allSubpatternsInPrevalent(pattern, prevalentPatterns, degree)) {
+                    #pragma omp critical
                     _candidatePatterns.push_back(pattern);
                 }
             }
@@ -941,13 +889,11 @@ extern "C" {
                 subregions[i].degree2Processing(size2_candidatePatterns,
                                                 size2_candidatePatterns.size(), 
                                                 prevalence_threshold, i);
-            std::cout << "exited" << std::endl;
             
             int degree = 3;
             std::vector<std::vector<std::string>> candidatePatterns =
                 subregions[i].getCandidatePatterns(subregions[i].size2_patterns, degree);
             while (!candidatePatterns.empty()) {
-                std::cout << "calling colocationGeneral" << std::endl;
                 std::vector<std::vector<std::string>> prevalent_patterns = 
                 subregions[i].colocationGeneral(candidatePatterns, candidatePatterns.size(), 
                            prevalence_threshold, degree, i);
@@ -957,6 +903,9 @@ extern "C" {
                 }
                 candidatePatterns = subregions[i].getCandidatePatterns(prevalent_patterns,
                                                                        degree);
+                if (degree == 5) {
+                    break;
+                }
             }
         }
     }
