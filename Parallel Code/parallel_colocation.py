@@ -132,11 +132,12 @@ def shapefile_processing(shapefile_path, distance_threshold):
 
 def main():
     distance_directory = 'IntermediateData/distance_threshold_parameter.txt'
-    shapefile_path = '/home/amk7r/Parallel-Project/data/north_america/shapefile'
-    directory_path = '/home/amk7r/Parallel-Project/data/north_america'
+    shapefile_path = '/home/amk7r/Parallel-Project/data/middle_east/shapefile'
+    directory_path = '/home/amk7r/Parallel-Project/data/middle_east'
     prevalence_threshold = 0.55    # set the prevalence threshold
     
     distance_threshold = read_distance_threshold(distance_directory)
+    distance_threshold = 15.77
     subregions, offsets, number_subregions, dataframes = read_data(directory_path)
     
     s = time.time()
@@ -159,16 +160,19 @@ def main():
     ids = shapefile_processing(shapefile_path, distance_threshold)
     
     number_borders = 1
+    s = time.time()
     lib.border_main(ctypes.c_int(number_borders), ctypes.c_double(prevalence_threshold))
+    e = time.time()
+    print("TIME TAKEN (SEC) BORDER:", e - s)
     
-    arr_len = len(ids)
+    '''arr_len = len(ids)
     arr_type = ctypes.c_int * arr_len
     arr_c = arr_type(*ids)
     border_number = 0
     lib.update_border_info.argtypes = (ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int)
     lib.update_border_info(arr_c, arr_len, border_number)
     
-    '''lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
+    lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
     lib.combine_hashmaps(number_subregions, number_borders)
     lib.combine_instance_tables.argtypes = (ctypes.c_int, ctypes.c_int)
     lib.combine_instance_tables(number_subregions, number_borders)
@@ -181,3 +185,41 @@ def main():
     
 if __name__ == "__main__":
     main()
+
+    
+'''
+North America
+    Serial:
+        sub_region_main: 0.976 sec
+        border_main: 0.002 sec
+        region_main:
+
+    Parallel:
+        sub_region_main: 0.581 sec
+        border_main: 0.003 sec
+        region_main:
+        
+Middle East
+    Serial:
+        sub_region_main: 325.825 sec
+        border_main: 0.001 sec
+        region_main:
+
+    Parallel:
+        sub_region_main: 145.812 sec
+        border_main: 0.003 sec
+        region_main:
+
+
+South Asia
+    Serial:
+        sub_region_main:
+        border_main:
+        region_main:
+
+    Parallel:
+        sub_region_main:
+        border_main:
+        region_main:
+
+'''

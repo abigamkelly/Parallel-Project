@@ -694,7 +694,7 @@ extern "C" {
                 if (!all_found) continue;
                 if (prevalentPatterns.find(subpattern) == prevalentPatterns.end()) {
                     #pragma omp critical
-                    all_found = false
+                    all_found = false;
                 }
             }
             return all_found;
