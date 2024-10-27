@@ -132,12 +132,11 @@ def shapefile_processing(shapefile_path, distance_threshold):
 
 def main():
     distance_directory = 'IntermediateData/distance_threshold_parameter.txt'
-    shapefile_path = '/home/amk7r/Parallel-Project/data/middle_east/shapefile'
-    directory_path = '/home/amk7r/Parallel-Project/data/middle_east'
+    shapefile_path = '/home/amk7r/Parallel-Project/data/north_america/shapefile'
+    directory_path = '/home/amk7r/Parallel-Project/data/north_america'
     prevalence_threshold = 0.55    # set the prevalence threshold
     
     distance_threshold = read_distance_threshold(distance_directory)
-    distance_threshold = 15.77
     subregions, offsets, number_subregions, dataframes = read_data(directory_path)
     
     s = time.time()
@@ -165,6 +164,7 @@ def main():
     e = time.time()
     print("TIME TAKEN (SEC) BORDER:", e - s)
     
+    s = time.time()
     '''arr_len = len(ids)
     arr_type = ctypes.c_int * arr_len
     arr_c = arr_type(*ids)
@@ -175,13 +175,32 @@ def main():
     lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
     lib.combine_hashmaps(number_subregions, number_borders)
     lib.combine_instance_tables.argtypes = (ctypes.c_int, ctypes.c_int)
-    lib.combine_instance_tables(number_subregions, number_borders)
+    lib.combine_instance_tables(number_subregions, number_borders)'''
+    
+    # Define wrapper functions to run in parallel
+    def call_combine_hashmaps():
+        lib.combine_hashmaps(number_subregions, number_borders)
+
+    def call_combine_instance_tables():
+        lib.combine_instance_tables(number_subregions, number_borders)
+
+    # Execute the functions concurrently
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(call_combine_hashmaps), executor.submit(call_combine_instance_tables)]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()  # Retrieve any result if functions return values
+                print("Function completed with result:", result)
+            except Exception as e:
+                print("An error occurred:", e)
+    e = time.time()
+    print("TIME TAKEN (SEC) PROCESSING:", e - s)
     
     features = list(border.combined_df['featureType'].unique())
     string_ptrs = (ctypes.c_char_p * len(features))()
     string_ptrs[:] = [s.encode() for s in features]
     lib.region_main.argtypes = (ctypes.c_int, ctypes.c_double, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int)
-    lib.region_main(number_subregions, prevalence_threshold, string_ptrs, len(features))'''
+    lib.region_main(number_subregions, prevalence_threshold, string_ptrs, len(features))
     
 if __name__ == "__main__":
     main()
@@ -191,35 +210,29 @@ if __name__ == "__main__":
 North America
     Serial:
         sub_region_main: 0.976 sec
-        border_main: 0.002 sec
         region_main:
 
     Parallel:
         sub_region_main: 0.581 sec
-        border_main: 0.003 sec
         region_main:
         
 Middle East
     Serial:
         sub_region_main: 325.825 sec
-        border_main: 0.001 sec
         region_main:
 
     Parallel:
         sub_region_main: 145.812 sec
-        border_main: 0.003 sec
         region_main:
 
 
 South Asia
     Serial:
         sub_region_main:
-        border_main:
         region_main:
 
     Parallel:
         sub_region_main:
-        border_main:
         region_main:
 
 '''

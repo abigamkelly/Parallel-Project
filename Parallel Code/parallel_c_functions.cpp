@@ -25,10 +25,11 @@ extern "C" {
 
         // get the featureInfo
         void read_featureInfo() {
-            std::ifstream featureInfo_file("IntermediateData/featureInfoParallel/featureInfo" + std::to_string(this->subregion_id) + ".csv");
+            std::ifstream featureInfo_file("IntermediateData/featureInfoParallel/featureInfo" 
+                                           + std::to_string(this->subregion_id) + ".csv");
         
             if (!featureInfo_file.is_open()) {
-                std::cerr << "Error opening file!" << std::endl;
+                std::cerr << "Error opening subregion featureInfo file!" << std::endl;
             }
 
             std::string line;
@@ -69,7 +70,7 @@ extern "C" {
                                               std::to_string(this->subregion_id) + ".csv");
 
             if (!star_neighbors_file.is_open()) {
-                std::cerr << "Error opening file" << std::endl;
+                std::cerr << "Error opening subregion starNeighbors file!" << std::endl;
             }
             std::string line;
             std::getline(star_neighbors_file, line);
@@ -201,15 +202,10 @@ extern "C" {
                 }
             }
             
-            std::cout << "Degree 2 Prevalent Patterns for Sub-Region " + std::to_string(number_subregions) 
-                + ":" << std::endl;
-            std::ofstream size2_file("size2_patterns_subregion" + std::to_string(number_subregions) + ".txt");
+            std::cout << "Degree 2 Prevalent Patterns for Sub-Region " << number_subregions << ":" << std::endl;
             for (auto i : size2_patterns) {
                 std::cout << "(" << i[0] << ", " << i[1] << ")" << std::endl;
-                size2_file << "(" << i[0] << ", " << i[1] << ")" << std::endl;
             }
-            size2_file.close();
-            std::cout << "exiting" << std::endl;
             return size2_patterns;
         }
 
@@ -368,26 +364,17 @@ extern "C" {
             }
             
             if(!prevalent.empty()) {
-                std::cout << "Degree " << degree << " Prevalent Patterns for Sub-Region" +
-                    std::to_string(number_subregions) + ":"<< std::endl;
-                std::ofstream patterns_file("size" + std::to_string(degree) + "_patterns_subregion" 
-                                            + std::to_string(number_subregions) + ".txt");
-
+                std::cout << "Degree " << degree << " Prevalent Patterns for Sub-Region" << number_subregions << ":"<< std::endl;
                 for (auto& patternVec : prevalent) {
                     std::cout << "(";
-                    patterns_file << "(";
                     for (size_t i = 0; i < patternVec.size(); i++) {
                         std::cout << patternVec[i];
-                        patterns_file << patternVec[i];
                         if (i < patternVec.size() - 1) {
                             std::cout << ", ";
-                            patterns_file << ", ";
                         }
                     }
                     std::cout << ")" << std::endl;
-                    patterns_file << ")" << std::endl;
                 }
-                patterns_file.close();
             }
             return prevalent;
         }
@@ -412,7 +399,7 @@ extern "C" {
             std::ifstream featureInfo_file("IntermediateData/border_featureInfo/featureInfo.csv");
         
             if (!featureInfo_file.is_open()) {
-                std::cerr << "Error opening file" << std::endl;
+                std::cerr << "Error opening border featureInfo file" << std::endl;
             }
 
             std::string line;
@@ -452,7 +439,7 @@ extern "C" {
             std::ifstream star_neighbors_file("IntermediateData/border_starNeighbors/starNeighbors.csv");
 
             if (!star_neighbors_file.is_open()) {
-                std::cerr << "Error opening file" << std::endl;
+                std::cerr << "Error opening border starNeighbors file" << std::endl;
             }
 
             std::string line1;
@@ -657,12 +644,9 @@ extern "C" {
             }
             
             std::cout << "Degree 2 Prevalent Patterns for Entire Region:" << std::endl;
-            std::ofstream size2_file("size2_patterns_entire_region.txt");
             for (auto i : prevalent) {
                 std::cout << "(" << i[0] << ", " << i[1] << ")" << std::endl;
-                size2_file << "(" << i[0] << ", " << i[1] << ")" << std::endl;
             }
-            size2_file.close();
             return prevalent;
         }
         
@@ -733,21 +717,26 @@ extern "C" {
                                                                 double prevalence_threshold,
                                                                 int degree, int number_subregions) {
             std::vector<std::vector<std::string>> prevalent;
+            int cand_size = candidatePatterns.size();
             
-            for (const auto& currentPattern : candidatePatterns) {
-                std::vector<std::string> basePattern;
-                for (int j = 0; j < degree - 1; j++) {
-                    basePattern.push_back(currentPattern[j]);
-                }
+            #pragma omp parallel for
+            for (size_t cand_idx = 0; cand_idx < cand_size; cand_idx++) {
+                const auto& currentPattern = candidatePatterns[cand_idx];
+                std::vector<std::string> basePattern(currentPattern.begin(), currentPattern.begin() + degree - 1);
                 std::string lastFeature = currentPattern[degree - 1];
-                // Add entries to instance_table and hashmap
-                this->instance_table[currentPattern] = {};
-                this->hashmap[currentPattern] = {};
                 
-                // Initialize sets for each element in currentPattern in hashmap
-                for (const auto& f : currentPattern) {
-                    this->hashmap[currentPattern][f] = {};
+                #pragma omp critical
+                {
+                    // Add entries to instance_table and hashmap
+                    this->instance_table[currentPattern] = {};
+                    this->hashmap[currentPattern] = {};
+
+                    // Initialize sets for each element in currentPattern in hashmap
+                    for (const auto& f : currentPattern) {
+                        this->hashmap[currentPattern][f] = {};
+                    }  
                 }
+                
                 
                 auto colocTableIt = this->instance_table.find(basePattern);
                 std::map<std::vector<int>, std::vector<int>>& colocTable = colocTableIt->second;
@@ -826,12 +815,18 @@ extern "C" {
                             std::vector<int> new_key = key;
                             new_key.push_back(n);
                             std::vector<int> intersectionVec(all_neighbors.begin(), all_neighbors.end());
-                            this->instance_table[currentPattern][new_key] = intersectionVec;
+                            
+                            #pragma omp critical
+                            {
+                                this->instance_table[currentPattern][new_key] = intersectionVec;
 
-                            for (size_t k = 0; k < new_key.size(); ++k) {
-                                this->hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
+                                for (size_t k = 0; k < new_key.size(); ++k) {
+                                    this->hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
+                                }
+                                this->hashmap[currentPattern][lastFeature].insert(all_neighbors.begin(),
+                                                                                  all_neighbors.end());   
                             }
-                            this->hashmap[currentPattern][lastFeature].insert(all_neighbors.begin(), all_neighbors.end());
+                            
                         }
                     }
                 }
@@ -848,27 +843,22 @@ extern "C" {
                     }
                     double PI = *std::min_element(pr.begin(), pr.end());
                     if (PI >= prevalence_threshold) {
+                        #pragma omp critical
                         prevalent.push_back(currentPattern);
                     }
             }
             std::cout << "Degree " << degree << " Prevalent Patterns for Entire Region:" +
                 std::to_string(number_subregions) + ":"<< std::endl;
-            std::ofstream patterns_file("size" + std::to_string(degree) + "_patterns_entire_region.txt");
             for (auto& patternVec : prevalent) {
                 std::cout << "(";
-                patterns_file << "(";
                 for (size_t i = 0; i < patternVec.size(); i++) {
                     std::cout << patternVec[i];
-                    patterns_file << patternVec[i];
                     if (i < patternVec.size() - 1) {
                         std::cout << ", ";
-                        patterns_file << ", ";
                     }
                 }
                 std::cout << ")" << std::endl;
-                patterns_file << ")" << std::endl;
             }
-            patterns_file.close();
             return prevalent;
         }
     };
@@ -928,7 +918,7 @@ extern "C" {
         } 
     } 
 
-    void update_border_info(int* ids, int ids_size, int i) {
+    /*void update_border_info(int* ids, int ids_size, int i) {
         // update the border hashmap so that it has the original IDS not the indicies
         std::map<std::vector<std::string>, std::map<std::string, std::set<int>>> temp_hash;
         for (const auto& outer_pair : borders[i].hashmap) {
@@ -1001,9 +991,125 @@ extern "C" {
             temp_star_neighbors[original_id] = original_neighbors;
         }
         borders[i].star_neighbors = temp_star_neighbors;        
-    }
+    }*/
+    
+    void update_border_info(int* ids, int ids_size, int i) {
+        // Temporary storage structures
+        std::map<std::vector<std::string>, std::map<std::string, std::set<int>>> temp_hash;
+        std::map<std::vector<std::string>, std::map<std::vector<int>, std::vector<int>>> temp_instance_table;
+        std::map<int, std::vector<int>> temp_star_neighbors;
 
-    // combine the hashmaps of the subregions and border region
+        // Parallelize the outer loop of the border hashmap update
+        #pragma omp parallel
+        {
+            std::map<std::vector<std::string>, std::map<std::string, std::set<int>>> local_temp_hash;
+
+            #pragma omp for nowait
+            for (size_t j = 0; j < borders[i].hashmap.size(); ++j) {
+                auto it = borders[i].hashmap.begin();
+                std::advance(it, j);
+
+                const std::vector<std::string>& outer_key = it->first;
+                const auto& inner_map = it->second;
+                std::map<std::string, std::set<int>> temp_inner_map;
+
+                for (const auto& inner_pair : inner_map) {
+                    const std::string& inner_key = inner_pair.first;
+                    const std::set<int>& inner_set = inner_pair.second;
+                    std::set<int> temp_inner_set;
+
+                    for (int index : inner_set) {
+                        if (index < ids_size) {
+                            temp_inner_set.insert(ids[index]);
+                        } else {
+                            #pragma omp critical
+                            std::cout << "Index out of range: " << index << std::endl;
+                        }
+                    }
+                    temp_inner_map[inner_key] = temp_inner_set;
+                }
+                #pragma omp critical
+                temp_hash[outer_key] = temp_inner_map;
+            }
+        }
+
+        // Update the instance table
+        #pragma omp parallel
+        {
+            std::map<std::vector<std::string>, std::map<std::vector<int>, std::vector<int>>> local_temp_instance_table;
+
+            #pragma omp for nowait
+            for (size_t j = 0; j < borders[i].instance_table.size(); ++j) {
+                auto it = borders[i].instance_table.begin();
+                std::advance(it, j);
+
+                const std::vector<std::string>& outer_key = it->first;
+                const auto& inner_map = it->second;
+                std::map<std::vector<int>, std::vector<int>> temp_inner_map;
+
+                for (const auto& inner_pair : inner_map) {
+                    const std::vector<int>& inner_key = inner_pair.first;
+                    const std::vector<int>& inner_value = inner_pair.second;
+                    std::vector<int> new_inner_key;
+                    std::vector<int> new_inner_value;
+
+                    for (int index : inner_key) {
+                        if (index < ids_size) {
+                            new_inner_key.push_back(ids[index]);
+                        } else {
+                            #pragma omp critical
+                            std::cout << "Index out of range: " << index << std::endl;
+                        }
+                    }
+
+                    for (int index : inner_value) {
+                        if (index < ids_size) {
+                            new_inner_value.push_back(ids[index]);
+                        } else {
+                            #pragma omp critical
+                            std::cout << "Index out of range: " << index << std::endl;
+                        }
+                    }
+                    temp_inner_map[new_inner_key] = new_inner_value;
+                }
+                #pragma omp critical
+                temp_instance_table[outer_key] = temp_inner_map;
+            }
+        }
+
+        // Update the star neighbors
+        #pragma omp parallel
+        {
+            std::map<int, std::vector<int>> local_temp_star_neighbors;
+
+            #pragma omp for nowait
+            for (size_t j = 0; j < borders[i].star_neighbors.size(); ++j) {
+                auto it = borders[i].star_neighbors.begin();
+                std::advance(it, j);
+
+                int original_id = ids[it->first];
+                const std::vector<int>& neighbors_indices = it->second;
+                std::vector<int> original_neighbors;
+
+                for (int index : neighbors_indices) {
+                    if (index < ids_size) {
+                        original_neighbors.push_back(ids[index]);
+                    } else {
+                        #pragma omp critical
+                        std::cout << "Index out of range: " << index << std::endl;
+                    }
+                }
+                #pragma omp critical
+                temp_star_neighbors[original_id] = original_neighbors;
+            }
+        }
+
+        // Assign back the temporary structures to borders[i]
+        borders[i].hashmap = temp_hash;
+        borders[i].instance_table = temp_instance_table;
+        borders[i].star_neighbors = temp_star_neighbors;
+    }
+    
     void combine_hashmaps(int number_subregions, int number_borders) {
         std::set<std::vector<std::string>> keys_needed;
         
@@ -1059,6 +1165,7 @@ extern "C" {
             }
         }  
     }
+    
 
     // combine the instance tables of the subregions and the border region
     void combine_instance_tables(int number_subregions, int number_borders) {
