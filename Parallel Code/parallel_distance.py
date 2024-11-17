@@ -122,7 +122,7 @@ def knee_method(averages):
     return distance_threshold
 
 def main():
-    directory = '/home/amk7r/Parallel-Project/data/north_america/'
+    directory = '/home/amk7r/colocation_mining/Parallel-Project/data/north_america/'
     df = read_data(directory)
     s = time.time()
     all_distances, max_k, num_pts = rtree_processing(df)

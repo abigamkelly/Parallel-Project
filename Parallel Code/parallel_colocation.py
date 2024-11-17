@@ -111,7 +111,6 @@ def shapefile_processing(shapefile_path, distance_threshold):
         'ID': ID})
     
     ids = border.border_df['ID'].to_list()
-    return ids
     
     border.calc_feature_info()
     with open('IntermediateData/border_featureInfo/featureInfo.csv', 'w', newline='') as csvfile:
@@ -128,15 +127,17 @@ def shapefile_processing(shapefile_path, distance_threshold):
             values_str = ' '.join(map(str, neighbors))
             writer.writerow([feature, values_str])
             
-    return
+    return ids
 
 def main():
+    start = time.time()
     distance_directory = 'IntermediateData/distance_threshold_parameter.txt'
-    shapefile_path = '/home/amk7r/Parallel-Project/data/north_america/shapefile'
-    directory_path = '/home/amk7r/Parallel-Project/data/north_america'
-    prevalence_threshold = 0.55    # set the prevalence threshold
+    shapefile_path = '/home/amk7r/colocation_mining/Parallel-Project/data/north_america/shapefile'
+    directory_path = '/home/amk7r/colocation_mining/Parallel-Project/data/north_america'
+    prevalence_threshold = 0.55   # set the prevalence threshold
     
     distance_threshold = read_distance_threshold(distance_directory)
+    distance_threshold = 71.22
     subregions, offsets, number_subregions, dataframes = read_data(directory_path)
     
     s = time.time()
@@ -189,21 +190,27 @@ def main():
     string_ptrs = (ctypes.c_char_p * len(features))()
     string_ptrs[:] = [s.encode() for s in features]
     lib.region_main.argtypes = (ctypes.c_int, ctypes.c_double, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int)
+    s = time.time()
     lib.region_main(number_subregions, prevalence_threshold, string_ptrs, len(features))
+    e = time.time()
+    print("TIME TAKEN (SEC) REGION:", e - s)
+    end = time.time()
+    print("TOTAL TIME (SEC):", start - end)
     
 if __name__ == "__main__":
     main()
 
     
 '''
+prevalence_threshold = 0.55
 North America
-    Serial:
+    Serial: 2984.2833666801453
         sub_region_main: 0.976 sec
-        region_main:
+        region_main: 
 
     Parallel:
-        sub_region_main: 0.581 sec
-        region_main:
+        subregion: 0.581 sec
+        region_main: 0.761 sec
         
 Middle East
     Serial:
@@ -213,7 +220,6 @@ Middle East
     Parallel:
         sub_region_main: 145.812 sec
         region_main:
-
 
 South Asia
     Serial:
