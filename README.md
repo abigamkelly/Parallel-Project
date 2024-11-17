@@ -25,6 +25,5 @@ This github includes the code for the parallel regional colocation mining framew
 
 ### How to Compile and Run:
 1. Change your current directory to **Parallel Code**
-2. Run **parallel_distance.py** by typing the following command in the terminal: "python parallel_distance.py"
-3. Type the following command in the terminal to compile the c++ code: "g++ -O3 -fopenmp -shared -o c_functions.so -fPIC parallel_c_functions.cpp"
-4. Run **parallel_colocation.py** by typing the following command in the terminal: "python parallel_colocation.py"
+2. Type the following command in the terminal: "chmod +x script.sh"
+4. Type the following command in the terminal: "./script.sh"
