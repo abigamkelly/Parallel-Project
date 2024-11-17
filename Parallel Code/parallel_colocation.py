@@ -165,17 +165,6 @@ def main():
     print("TIME TAKEN (SEC) BORDER:", e - s)
     
     s = time.time()
-    '''arr_len = len(ids)
-    arr_type = ctypes.c_int * arr_len
-    arr_c = arr_type(*ids)
-    border_number = 0
-    lib.update_border_info.argtypes = (ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int)
-    lib.update_border_info(arr_c, arr_len, border_number)
-    
-    lib.combine_hashmaps.argtypes = (ctypes.c_int, ctypes.c_int)
-    lib.combine_hashmaps(number_subregions, number_borders)
-    lib.combine_instance_tables.argtypes = (ctypes.c_int, ctypes.c_int)
-    lib.combine_instance_tables(number_subregions, number_borders)'''
     
     # Define wrapper functions to run in parallel
     def call_combine_hashmaps():
