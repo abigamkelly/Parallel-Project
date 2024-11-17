@@ -711,64 +711,70 @@ extern "C" {
             return std::vector<int>(start_it, end_it);
         }
         
-        /*std::vector<std::vector<std::string>> colocationGeneral(std::vector<std::vector<std::string>> 
-                                                                candidatePatterns, 
-                                                                int candidatePatterns_size, 
-                                                                double prevalence_threshold,
-                                                                int degree, int number_subregions) {
+        
+        std::vector<std::vector<std::string>> colocationGeneral(
+            std::vector<std::vector<std::string>> candidatePatterns, 
+            int candidatePatterns_size, 
+            double prevalence_threshold,
+            int degree, 
+            int number_subregions) {
+        
             std::vector<std::vector<std::string>> prevalent;
             int cand_size = candidatePatterns.size();
-            
-            #pragma omp parallel for
+        
+            // Thread-local storage for instance_table and hashmap
+            std::vector<std::map<std::vector<std::string>, std::map<std::vector<int>, std::vector<int>>>> local_instance_tables(omp_get_max_threads());
+            std::vector<std::map<std::vector<std::string>, std::map<std::string, std::set<int>>>> local_hashmaps(omp_get_max_threads());
+        
+            #pragma omp parallel for schedule(dynamic)
             for (size_t cand_idx = 0; cand_idx < cand_size; cand_idx++) {
+                int thread_id = omp_get_thread_num();
+                auto& local_instance_table = local_instance_tables[thread_id];
+                auto& local_hashmap = local_hashmaps[thread_id];
+        
                 const auto& currentPattern = candidatePatterns[cand_idx];
                 std::vector<std::string> basePattern(currentPattern.begin(), currentPattern.begin() + degree - 1);
                 std::string lastFeature = currentPattern[degree - 1];
-                
-                #pragma omp critical
-                {
-                    // Add entries to instance_table and hashmap
-                    this->instance_table[currentPattern] = {};
-                    this->hashmap[currentPattern] = {};
-
-                    // Initialize sets for each element in currentPattern in hashmap
-                    for (const auto& f : currentPattern) {
-                        this->hashmap[currentPattern][f] = {};
-                    }  
+        
+                // Initialize thread-local tables for currentPattern
+                local_instance_table[currentPattern] = {};  
+                local_hashmap[currentPattern] = {};         
+        
+                for (const auto& f : currentPattern) {
+                    local_hashmap[currentPattern][f] = {};
                 }
-                
-                
+        
+                // Locate the colocTable using the base pattern
                 auto colocTableIt = this->instance_table.find(basePattern);
+                if (colocTableIt == this->instance_table.end()) continue;  // Skip if base pattern not found
+        
                 std::map<std::vector<int>, std::vector<int>>& colocTable = colocTableIt->second;
-                
+        
                 for (const auto& entry : colocTable) {
                     const std::vector<int>& key = entry.first;
                     std::set<int> commonLastNeighbors;
+        
                     for (int instanceID : key) {
                         std::set<int> lastFeatureNeighbors;
-                        for (auto subregion : subregions) {
+        
+                        for (auto& subregion : subregions) {
                             int lastFeatureStart = subregion.featureInfo[lastFeature][1];
                             int lastFeatureEnd = subregion.featureInfo[lastFeature][2];
-                            
+        
+                            // Find neighbors in range
                             auto subregion_star_neighbor_it = subregion.star_neighbors.find(instanceID);
                             if (subregion_star_neighbor_it != subregion.star_neighbors.end()) {
-                                std::vector<int> subregion_star_neighbor_list(subregion_star_neighbor_it->second.begin(), 
-                                                   subregion_star_neighbor_it->second.end());
-                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(subregion_star_neighbor_list,
-                                                                                                      lastFeatureStart, 
-                                                                                                      lastFeatureEnd);
-                                std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                                lastFeatureNeighbors.insert(neighborsInRange.begin(), neighborsInRange.end());
+                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
+                                    subregion_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
+                                lastFeatureNeighbors.insert(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
                             }
+        
+                            // Repeat for border neighbors
                             auto border_star_neighbor_it = borders[0].star_neighbors.find(instanceID);
                             if (border_star_neighbor_it != borders[0].star_neighbors.end()) {
-                                std::vector<int> border_star_neighbor_list(border_star_neighbor_it->second.begin(), 
-                                                   border_star_neighbor_it->second.end());
-                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(border_star_neighbor_list,
-                                                                                                      lastFeatureStart, 
-                                                                                                      lastFeatureEnd);
-                                std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                                lastFeatureNeighbors.insert(neighborsInRange.begin(), neighborsInRange.end());
+                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
+                                    border_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
+                                lastFeatureNeighbors.insert(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
                             }
                         }
                         if (commonLastNeighbors.empty()) {
@@ -781,78 +787,95 @@ extern "C" {
                             commonLastNeighbors = intersection;
                         }
                     }
+        
                     for (int n : colocTable[key]) {
                         std::set<int> all_neighbors;
-                        for (auto subregion : subregions) {
+        
+                        for (auto& subregion : subregions) {
                             int lastFeatureStart = subregion.featureInfo[lastFeature][1];
                             int lastFeatureEnd = subregion.featureInfo[lastFeature][2];
+        
                             std::set<int> neighbors_subregion;
                             auto subregion_star_neighbor_it = subregion.star_neighbors.find(n);
                             if (subregion_star_neighbor_it != subregion.star_neighbors.end()) {
-                                std::vector<int> subregion_star_neighbor_list(subregion_star_neighbor_it->second.begin(), 
-                                                   subregion_star_neighbor_it->second.end());
-                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(subregion_star_neighbor_list,
-                                                                                                      lastFeatureStart, 
-                                                                                                      lastFeatureEnd);
+                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
+                                    subregion_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
                                 std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
                                 std::set_intersection(commonLastNeighbors.begin(), commonLastNeighbors.end(),
-                                                     neighborsInRange.begin(), neighborsInRange.end(),
-                                                     std::inserter(neighbors_subregion, neighbors_subregion.begin()));
+                                                      neighborsInRange.begin(), neighborsInRange.end(),
+                                                      std::inserter(neighbors_subregion, neighbors_subregion.begin()));
                             }
+        
+                            // Border neighbors
                             std::set<int> neighbors_border;
                             auto border_star_neighbor_it = borders[0].star_neighbors.find(n);
                             if (border_star_neighbor_it != borders[0].star_neighbors.end()) {
-                                std::vector<int> border_star_neighbor_list(border_star_neighbor_it->second.begin(), 
-                                                   border_star_neighbor_it->second.end());
-                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(border_star_neighbor_list, 
-                                                                                                      lastFeatureStart, 
-                                                                                                      lastFeatureEnd);
+                                std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
+                                    border_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
                                 std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
                                 std::set_intersection(commonLastNeighbors.begin(), commonLastNeighbors.end(),
-                                                     neighborsInRange.begin(), neighborsInRange.end(),
-                                                     std::inserter(neighbors_border, neighbors_border.begin()));
+                                                      neighborsInRange.begin(), neighborsInRange.end(),
+                                                      std::inserter(neighbors_border, neighbors_border.begin()));
                             }
+        
                             all_neighbors.insert(neighbors_subregion.begin(), neighbors_subregion.end());
                             all_neighbors.insert(neighbors_border.begin(), neighbors_border.end());
                         }
+        
                         if (!all_neighbors.empty()) {
                             std::vector<int> new_key = key;
                             new_key.push_back(n);
                             std::vector<int> intersectionVec(all_neighbors.begin(), all_neighbors.end());
-                            
-                            #pragma omp critical
-                            {
-                                this->instance_table[currentPattern][new_key] = intersectionVec;
-
-                                for (size_t k = 0; k < new_key.size(); ++k) {
-                                    this->hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
-                                }
-                                this->hashmap[currentPattern][lastFeature].insert(all_neighbors.begin(),
-                                                                                  all_neighbors.end());   
+        
+                            // Add to thread-local instance_table and hashmap
+                            local_instance_table[currentPattern][new_key] = intersectionVec;
+                            for (size_t k = 0; k < new_key.size(); ++k) {
+                                local_hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
                             }
-                            
+                            local_hashmap[currentPattern][lastFeature].insert(all_neighbors.begin(), all_neighbors.end());
                         }
                     }
                 }
+        
                 std::vector<double> pr;
-                    for (int m = 0; m < degree; ++m) {
-                        std::string f = currentPattern[m];
-                        int total_count = 0;
-                        for (auto subregion : subregions) {
-                            total_count += subregion.featureInfo[f][0];
-                        }
-                        double ratio = static_cast<double>(this->hashmap[currentPattern][f].size()) 
-                            / total_count;
-                        pr.push_back(ratio);
+                for (int m = 0; m < degree; ++m) {
+                    std::string f = currentPattern[m];
+                    int total_count = 0;
+        
+                    for (auto& subregion : subregions) {
+                        total_count += subregion.featureInfo[f][0];
                     }
-                    double PI = *std::min_element(pr.begin(), pr.end());
-                    if (PI >= prevalence_threshold) {
-                        #pragma omp critical
-                        prevalent.push_back(currentPattern);
-                    }
+                    double ratio = static_cast<double>(local_hashmap[currentPattern][f].size()) / total_count;
+                    pr.push_back(ratio);
+                }
+        
+                double PI = *std::min_element(pr.begin(), pr.end());
+                if (PI >= prevalence_threshold) {
+                    #pragma omp critical
+                    prevalent.push_back(currentPattern);
+                }
             }
-            std::cout << "Degree " << degree << " Prevalent Patterns for Entire Region:" << std::endl;
-            for (auto& patternVec : prevalent) {
+        
+            // Merge thread-local data into shared instance_table and hashmap
+            #pragma omp parallel for
+            for (size_t i = 0; i < local_instance_tables.size(); ++i) {
+                #pragma omp critical
+                {
+                    for (const auto& pattern_entry : local_instance_tables[i]) {
+                        this->instance_table[pattern_entry.first].insert(
+                            pattern_entry.second.begin(), pattern_entry.second.end());
+                    }
+                    for (const auto& hashmap_entry : local_hashmaps[i]) {
+                        for (const auto& feature_entry : hashmap_entry.second) {
+                            this->hashmap[hashmap_entry.first][feature_entry.first].insert(
+                                feature_entry.second.begin(), feature_entry.second.end());
+                        }
+                    }
+                }
+            }
+        
+            std::cout << "Degree " << degree << " Prevalent Patterns for Entire Region: " << std::endl;
+            for (const auto& patternVec : prevalent) {
                 std::cout << "(";
                 for (size_t i = 0; i < patternVec.size(); i++) {
                     std::cout << patternVec[i];
@@ -862,184 +885,9 @@ extern "C" {
                 }
                 std::cout << ")" << std::endl;
             }
+            
             return prevalent;
-        }*/
-        std::vector<std::vector<std::string>> colocationGeneral(
-    std::vector<std::vector<std::string>> candidatePatterns, 
-    int candidatePatterns_size, 
-    double prevalence_threshold,
-    int degree, 
-    int number_subregions) {
-
-    std::vector<std::vector<std::string>> prevalent;
-    int cand_size = candidatePatterns.size();
-
-    // Thread-local storage for instance_table and hashmap
-    std::vector<std::map<std::vector<std::string>, std::map<std::vector<int>, std::vector<int>>>> local_instance_tables(omp_get_max_threads());
-    std::vector<std::map<std::vector<std::string>, std::map<std::string, std::set<int>>>> local_hashmaps(omp_get_max_threads());
-
-    #pragma omp parallel for schedule(dynamic)
-    for (size_t cand_idx = 0; cand_idx < cand_size; cand_idx++) {
-        int thread_id = omp_get_thread_num();
-        auto& local_instance_table = local_instance_tables[thread_id];
-        auto& local_hashmap = local_hashmaps[thread_id];
-
-        const auto& currentPattern = candidatePatterns[cand_idx];
-        std::vector<std::string> basePattern(currentPattern.begin(), currentPattern.begin() + degree - 1);
-        std::string lastFeature = currentPattern[degree - 1];
-
-        // Initialize thread-local tables for currentPattern
-        local_instance_table[currentPattern] = {};  
-        local_hashmap[currentPattern] = {};         
-
-        for (const auto& f : currentPattern) {
-            local_hashmap[currentPattern][f] = {};
         }
-
-        // Locate the colocTable using the base pattern
-        auto colocTableIt = this->instance_table.find(basePattern);
-        if (colocTableIt == this->instance_table.end()) continue;  // Skip if base pattern not found
-
-        std::map<std::vector<int>, std::vector<int>>& colocTable = colocTableIt->second;
-
-        for (const auto& entry : colocTable) {
-            const std::vector<int>& key = entry.first;
-            std::set<int> commonLastNeighbors;
-
-            for (int instanceID : key) {
-                std::set<int> lastFeatureNeighbors;
-
-                for (auto& subregion : subregions) {
-                    int lastFeatureStart = subregion.featureInfo[lastFeature][1];
-                    int lastFeatureEnd = subregion.featureInfo[lastFeature][2];
-
-                    // Find neighbors in range
-                    auto subregion_star_neighbor_it = subregion.star_neighbors.find(instanceID);
-                    if (subregion_star_neighbor_it != subregion.star_neighbors.end()) {
-                        std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
-                            subregion_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
-                        lastFeatureNeighbors.insert(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                    }
-
-                    // Repeat for border neighbors
-                    auto border_star_neighbor_it = borders[0].star_neighbors.find(instanceID);
-                    if (border_star_neighbor_it != borders[0].star_neighbors.end()) {
-                        std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
-                            border_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
-                        lastFeatureNeighbors.insert(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                    }
-                }
-                if (commonLastNeighbors.empty()) {
-                    commonLastNeighbors = lastFeatureNeighbors;
-                } else {
-                    std::set<int> intersection;
-                    std::set_intersection(commonLastNeighbors.begin(), commonLastNeighbors.end(),
-                                          lastFeatureNeighbors.begin(), lastFeatureNeighbors.end(),
-                                          std::inserter(intersection, intersection.begin()));
-                    commonLastNeighbors = intersection;
-                }
-            }
-
-            for (int n : colocTable[key]) {
-                std::set<int> all_neighbors;
-
-                for (auto& subregion : subregions) {
-                    int lastFeatureStart = subregion.featureInfo[lastFeature][1];
-                    int lastFeatureEnd = subregion.featureInfo[lastFeature][2];
-
-                    std::set<int> neighbors_subregion;
-                    auto subregion_star_neighbor_it = subregion.star_neighbors.find(n);
-                    if (subregion_star_neighbor_it != subregion.star_neighbors.end()) {
-                        std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
-                            subregion_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
-                        std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                        std::set_intersection(commonLastNeighbors.begin(), commonLastNeighbors.end(),
-                                              neighborsInRange.begin(), neighborsInRange.end(),
-                                              std::inserter(neighbors_subregion, neighbors_subregion.begin()));
-                    }
-
-                    // Border neighbors
-                    std::set<int> neighbors_border;
-                    auto border_star_neighbor_it = borders[0].star_neighbors.find(n);
-                    if (border_star_neighbor_it != borders[0].star_neighbors.end()) {
-                        std::vector<int> neighborsInRange_vector = this->findNeighborsInRange(
-                            border_star_neighbor_it->second, lastFeatureStart, lastFeatureEnd);
-                        std::set<int> neighborsInRange(neighborsInRange_vector.begin(), neighborsInRange_vector.end());
-                        std::set_intersection(commonLastNeighbors.begin(), commonLastNeighbors.end(),
-                                              neighborsInRange.begin(), neighborsInRange.end(),
-                                              std::inserter(neighbors_border, neighbors_border.begin()));
-                    }
-
-                    all_neighbors.insert(neighbors_subregion.begin(), neighbors_subregion.end());
-                    all_neighbors.insert(neighbors_border.begin(), neighbors_border.end());
-                }
-
-                if (!all_neighbors.empty()) {
-                    std::vector<int> new_key = key;
-                    new_key.push_back(n);
-                    std::vector<int> intersectionVec(all_neighbors.begin(), all_neighbors.end());
-
-                    // Add to thread-local instance_table and hashmap
-                    local_instance_table[currentPattern][new_key] = intersectionVec;
-                    for (size_t k = 0; k < new_key.size(); ++k) {
-                        local_hashmap[currentPattern][currentPattern[k]].insert(new_key[k]);
-                    }
-                    local_hashmap[currentPattern][lastFeature].insert(all_neighbors.begin(), all_neighbors.end());
-                }
-            }
-        }
-
-        std::vector<double> pr;
-        for (int m = 0; m < degree; ++m) {
-            std::string f = currentPattern[m];
-            int total_count = 0;
-
-            for (auto& subregion : subregions) {
-                total_count += subregion.featureInfo[f][0];
-            }
-            double ratio = static_cast<double>(local_hashmap[currentPattern][f].size()) / total_count;
-            pr.push_back(ratio);
-        }
-
-        double PI = *std::min_element(pr.begin(), pr.end());
-        if (PI >= prevalence_threshold) {
-            #pragma omp critical
-            prevalent.push_back(currentPattern);
-        }
-    }
-
-    // Merge thread-local data into shared instance_table and hashmap
-    #pragma omp parallel for
-    for (size_t i = 0; i < local_instance_tables.size(); ++i) {
-        #pragma omp critical
-        {
-            for (const auto& pattern_entry : local_instance_tables[i]) {
-                this->instance_table[pattern_entry.first].insert(
-                    pattern_entry.second.begin(), pattern_entry.second.end());
-            }
-            for (const auto& hashmap_entry : local_hashmaps[i]) {
-                for (const auto& feature_entry : hashmap_entry.second) {
-                    this->hashmap[hashmap_entry.first][feature_entry.first].insert(
-                        feature_entry.second.begin(), feature_entry.second.end());
-                }
-            }
-        }
-    }
-
-    std::cout << "Degree " << degree << " Prevalent Patterns for Entire Region: " << std::endl;
-    for (const auto& patternVec : prevalent) {
-        std::cout << "(";
-        for (size_t i = 0; i < patternVec.size(); i++) {
-            std::cout << patternVec[i];
-            if (i < patternVec.size() - 1) {
-                std::cout << ", ";
-            }
-        }
-        std::cout << ")" << std::endl;
-    }
-    
-    return prevalent;
-}
     };
     Region region;
 
@@ -1097,81 +945,6 @@ extern "C" {
         } 
     } 
 
-    /*void update_border_info(int* ids, int ids_size, int i) {
-        // update the border hashmap so that it has the original IDS not the indicies
-        std::map<std::vector<std::string>, std::map<std::string, std::set<int>>> temp_hash;
-        for (const auto& outer_pair : borders[i].hashmap) {
-            const std::vector<std::string>& outer_key = outer_pair.first;
-            const auto& inner_map = outer_pair.second;
-            std::map<std::string, std::set<int>> temp_inner_map;
-            for (const auto& inner_pair : inner_map) {
-                const std::string& inner_key = inner_pair.first;
-                const std::set<int>& inner_set = inner_pair.second;
-                std::set<int> temp_inner_set;
-                for (int index : inner_set) {
-                    if (index < ids_size) {
-                        temp_inner_set.insert(ids[index]);
-                    } else {
-                        std::cout << "Index out of range: " << index << std::endl;
-                    }
-                }
-                temp_inner_map[inner_key] = temp_inner_set;
-            }
-            temp_hash[outer_key] = temp_inner_map;
-        }
-        borders[i].hashmap = temp_hash;
-    
-        // update the border instance table so that it has the original IDS not indicies
-        std::map<std::vector<std::string>, std::map<std::vector<int>, std::vector<int>>> temp_instance_table;
-
-        for (const auto& outer_pair : borders[i].instance_table) {
-            const std::vector<std::string>& outer_key = outer_pair.first;
-            const auto& inner_map = outer_pair.second;
-            std::map<std::vector<int>, std::vector<int>> temp_inner_map;
-            for (const auto& inner_pair : inner_map) {
-                const std::vector<int>& inner_key = inner_pair.first;
-                const std::vector<int>& inner_value = inner_pair.second;
-                std::vector<int> new_inner_key;
-                for (int index : inner_key) {
-                    if (index < ids_size) {
-                        new_inner_key.push_back(ids[index]);
-                    } else {
-                        std::cout << "Index out of range: " << index << std::endl;
-                    }
-                }
-                std::vector<int> new_inner_value;
-                for (int index : inner_value) {
-                    if (index < ids_size) {
-                        new_inner_value.push_back(ids[index]);
-                    } else {
-                        std::cout << "Index out of range: " << index << std::endl;
-                    }
-                }
-                temp_inner_map[new_inner_key] = new_inner_value;
-            }
-            temp_instance_table[outer_key] = temp_inner_map;
-        }
-        borders[i].instance_table = temp_instance_table;
-        
-        // update the border star neighbors so that is has the original IDS not indices
-        std::map<int, std::vector<int>> temp_star_neighbors;
-        
-        for (const auto& entry : borders[i].star_neighbors) {
-            int original_id = ids[entry.first]; // Get the original ID corresponding to the index
-            const std::vector<int>& neighbors_indices = entry.second;
-            std::vector<int> original_neighbors;
-            for (int index : neighbors_indices) {
-                if (index < ids_size) {
-                    original_neighbors.push_back(ids[index]); // Get the original ID for each neighbor
-                } else {
-                    std::cout << "Index out of range: " << index << std::endl;
-                }
-            }
-            temp_star_neighbors[original_id] = original_neighbors;
-        }
-        borders[i].star_neighbors = temp_star_neighbors;        
-    }*/
-    
     void update_border_info(int* ids, int ids_size, int i) {
         // Temporary storage structures
         std::map<std::vector<std::string>, std::map<std::string, std::set<int>>> temp_hash;
